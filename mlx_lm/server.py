@@ -968,10 +968,15 @@ class ResponseGenerator:
             ctx.prompt_cache_count = len(prompt) - len(rest)
             cache_key = prompt[:]
             if cache is None:
-                cache = make_prompt_cache(self.model_provider.model)
-                if self.model_provider.draft_model is not None:
-                    cache += make_prompt_cache(self.model_provider.draft_model)
+                # Only make the extra argument if are recall by the user. 
+                cache_kwargs = {}
+                if self.model_provider.cli_args.kv_bits is not None:
+                    cache_kwargs["num_bits"] = self.model_provider.cli_args.kv_bits
 
+                # Create the cache with the extra arguments (empty if not using --kv-bits)
+                cache = make_prompt_cache(self.model_provider.model, **cache_kwargs)
+                if self.model_provider.draft_model is not None:
+                    cache += make_prompt_cache(self.model_provider.draft_model, **cache_kwargs)
             # Process the prompt and generate tokens
             for gen in stream_generate(
                 model=model,
@@ -1884,6 +1889,14 @@ def main():
         action="store_true",
         help="Use pipelining instead of tensor parallelism",
     )
+    parser.add_argument(
+        "--kv-bits",
+        type=int,
+        default=None,
+        choices=[2, 3, 4, 8],
+        help="Quantize the KV cache to the specified bits (e.g., 4 or 8)",
+    )
+
     args = parser.parse_args()
     if mx.metal.is_available():
         wired_limit = mx.device_info()["max_recommended_working_set_size"]
